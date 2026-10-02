@@ -1,0 +1,6 @@
+{
+  "name": "Struct — Offline Mesh Messaging",
+  "description": "Offline-first, decentralized, privacy-focused messaging application enabling nearby smartphones to communicate and relay encrypted messages through a local BLE mesh network without internet or central servers. Created by Dipak Bhondekar.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

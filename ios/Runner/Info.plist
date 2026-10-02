@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Struct</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>struct_app</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(FLUTTER_BUILD_NAME)</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleVersion</key>
+	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+
+	<!-- CoreBluetooth Permissions & Descriptions -->
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Struct uses Bluetooth Low Energy to discover nearby peers and relay end-to-end encrypted messages without internet access.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>Struct uses Bluetooth Low Energy to advertise local mesh services and relay encrypted packets.</string>
+
+	<!-- Biometrics for App Lock -->
+	<key>NSFaceIDUsageDescription</key>
+	<string>Struct uses Face ID to authenticate access to your local private messages.</string>
+
+	<!-- Camera for QR Code Peer Verification -->
+	<key>NSCameraUsageDescription</key>
+	<string>Struct uses the camera to scan safety fingerprints and QR codes for out-of-band peer identity verification.</string>
+
+	<!-- Background Modes for Mesh Continuity -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>bluetooth-central</string>
+		<string>bluetooth-peripheral</string>
+	</array>
+
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<false/>
+</dict>
+</plist>
