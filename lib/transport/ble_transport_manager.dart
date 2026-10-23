@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/services.dart';
 import '../mesh/models/packet.dart';
@@ -18,6 +19,7 @@ class DiscoveredPeer {
   final int rssi;
   final DateTime lastSeen;
   bool isConnected;
+  bool isProtocolReady;
 
   DiscoveredPeer({
     required this.address,
@@ -25,6 +27,7 @@ class DiscoveredPeer {
     required this.rssi,
     required this.lastSeen,
     this.isConnected = false,
+    this.isProtocolReady = false,
   });
 }
 
@@ -97,6 +100,7 @@ class BleTransportManager implements MeshTransportAdapter {
           rssi: rssi,
           lastSeen: DateTime.now(),
           isConnected: _peers[address]?.isConnected ?? false,
+          isProtocolReady: _peers[address]?.isProtocolReady ?? false,
         );
         _peersController.add(_peers.values.toList());
         break;
@@ -106,12 +110,23 @@ class BleTransportManager implements MeshTransportAdapter {
         final connected = event['connected'] as bool? ?? false;
         if (_peers.containsKey(address)) {
           _peers[address]!.isConnected = connected;
+          if (!connected) {
+            _peers[address]!.isProtocolReady = false;
+          }
           _peersController.add(_peers.values.toList());
         }
 
         if (connected) {
           // Drain pending store-and-forward messages for this peer
           _drainPendingForPeer(address);
+        }
+        break;
+
+      case 'mtuChanged':
+        final address = event['address'] as String;
+        if (_peers.containsKey(address)) {
+          _peers[address]!.isProtocolReady = true;
+          _peersController.add(_peers.values.toList());
         }
         break;
 
@@ -144,8 +159,15 @@ class BleTransportManager implements MeshTransportAdapter {
 
       if (decision.shouldDeliverLocal) {
         if (packet.packetType == PacketType.deliveryAck) {
-          // Delivery ACK received!
-          _deliveryAckController.add(packet.packetId);
+          // Delivery ACK received! Correlate with original messageId
+          String? ackMsgId;
+          try {
+            final json = jsonDecode(utf8.decode(packet.encryptedPayload));
+            if (json is Map && json.containsKey('ack_for')) {
+              ackMsgId = json['ack_for'] as String?;
+            }
+          } catch (_) {}
+          _deliveryAckController.add(ackMsgId ?? packet.packetId);
         } else {
           _inboundPacketController.add(packet);
         }
@@ -153,7 +175,7 @@ class BleTransportManager implements MeshTransportAdapter {
         // Forward along next hops
         final reEncoded = PacketCodec.encode(packet);
         for (final targetPeer in decision.targetPeers) {
-          await sendPacketToPeer(targetPeer, reEncoded);
+          await sendPacketToPeer(targetPeer, reEncoded, packetId: packet.packetId);
         }
       }
     } catch (_) {
@@ -162,9 +184,9 @@ class BleTransportManager implements MeshTransportAdapter {
   }
 
   @override
-  Future<void> sendPacketToPeer(String peerId, Uint8List rawPacketBytes) async {
+  Future<void> sendPacketToPeer(String peerId, Uint8List rawPacketBytes, {String packetId = 'pkt_out'}) async {
     final mtu = await getDeviceMtu(peerId);
-    final fragments = PacketFragmenter.fragment('pkt_out', rawPacketBytes, mtu: mtu);
+    final fragments = PacketFragmenter.fragment(packetId, rawPacketBytes, mtu: mtu);
 
     for (final frag in fragments) {
       final frameBytes = frag.toBytes();
@@ -213,7 +235,7 @@ class BleTransportManager implements MeshTransportAdapter {
     final readyRecords = storeAndForward.drainPendingForPeer(peerId);
     for (final record in readyRecords) {
       try {
-        await sendPacketToPeer(peerId, record.rawPacketBytes);
+        await sendPacketToPeer(peerId, record.rawPacketBytes, packetId: record.messageId);
         storeAndForward.acknowledgeDelivered(record.messageId);
       } catch (_) {
         storeAndForward.recordFailedAttempt(record.messageId);

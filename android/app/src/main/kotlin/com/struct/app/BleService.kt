@@ -362,9 +362,16 @@ class BleService : Service() {
         }
 
         override fun onCharacteristicWrite(gatt: BluetoothGatt?, characteristic: BluetoothGattCharacteristic?, status: Int) {
+            mainHandler.removeCallbacks(writeWatchdog)
             isWriting = false
             processNextWrite()
         }
+    }
+
+    private val writeWatchdog = Runnable {
+        Log.w(TAG, "Write watchdog fired! Resetting isWriting lock to prevent queue starvation.")
+        isWriting = false
+        processNextWrite()
     }
 
     // ------------------------------------------------------------------------
@@ -397,10 +404,12 @@ class BleService : Service() {
 
         try {
             rxChar.value = job.data
-            rxChar.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+            rxChar.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
             val success = gatt.writeCharacteristic(rxChar)
             if (success) {
                 isWriting = true
+                mainHandler.removeCallbacks(writeWatchdog)
+                mainHandler.postDelayed(writeWatchdog, 3000) // 3-second watchdog
                 job.callback(true)
             } else {
                 job.callback(false)
