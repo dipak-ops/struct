@@ -45,11 +45,16 @@ class EncryptedMessageService {
     final nonce = session.generateSendNonce();
     final plaintextBytes = Uint8List.fromList(utf8.encode(plaintext));
 
-    final encryptedPayload = await cryptoService.encryptPayload(
+    final encryptedBytes = await cryptoService.encryptPayload(
       plaintext: plaintextBytes,
       sessionKey: session.sendKey,
       nonce: nonce,
     );
+
+    // Prefix 12-byte nonce to ensure authenticated nonce transmission
+    final wirePayload = Uint8List(12 + encryptedBytes.length);
+    wirePayload.setRange(0, 12, nonce);
+    wirePayload.setRange(12, 12 + encryptedBytes.length, encryptedBytes);
 
     final now = DateTime.now();
     final expiresAt = now.add(lifetime ?? const Duration(hours: 1));
@@ -63,12 +68,40 @@ class EncryptedMessageService {
       ttl: ttl,
       createdAt: now,
       expiresAt: expiresAt,
-      encryptedPayload: encryptedPayload,
+      encryptedPayload: wirePayload,
       checksum: 0,
     );
   }
 
-  /// Decrypts inbound MeshPacket at destination
+  /// Creates a signed binary DELIVERY_ACK packet to route back to original sender
+  MeshPacket createDeliveryAckPacket({
+    required String originalSenderId,
+    required String messageId,
+    required String packetId,
+    int ttl = AppConstants.defaultTtl,
+  }) {
+    final now = DateTime.now();
+    final ackPayload = Uint8List.fromList(utf8.encode(jsonEncode({
+      'ack_for': messageId,
+      'ack_ts': now.millisecondsSinceEpoch,
+      'status': 'delivered',
+    })));
+
+    return MeshPacket(
+      version: 1,
+      packetType: PacketType.deliveryAck,
+      packetId: packetId,
+      senderId: localNodeId,
+      destinationId: originalSenderId,
+      ttl: ttl,
+      createdAt: now,
+      expiresAt: now.add(const Duration(minutes: 30)),
+      encryptedPayload: ackPayload,
+      checksum: 0,
+    );
+  }
+
+  /// Decrypts inbound MeshPacket at destination with nonce verification & Poly1305 MAC tag authentication
   Future<String> decryptInboundMessage(MeshPacket packet) async {
     if (packet.destinationId != localNodeId) {
       throw DecryptionError(
@@ -81,17 +114,23 @@ class EncryptedMessageService {
       throw SessionError('No active secure session found for sender: ${packet.senderId}');
     }
 
-    if (packet.encryptedPayload.length < 16) {
-      throw const DecryptionError('Ciphertext too short to contain Poly1305 MAC tag');
+    if (packet.encryptedPayload.length < 12 + 16) {
+      throw const DecryptionError(
+        'Payload too short to contain 12-byte nonce and 16-byte Poly1305 MAC tag',
+      );
     }
 
-    // Split ciphertext and 16-byte Poly1305 MAC
-    final ciphertextLen = packet.encryptedPayload.length - 16;
-    final ciphertext = packet.encryptedPayload.sublist(0, ciphertextLen);
-    final mac = packet.encryptedPayload.sublist(ciphertextLen);
+    // 1. Extract 12-byte transmitted nonce
+    final nonce = Uint8List.fromList(packet.encryptedPayload.sublist(0, 12));
 
-    // Nonce is tracked monotonically by session
-    final nonce = session.generateSendNonce();
+    // 2. Validate nonce against session state to prevent replay attacks and out-of-order repeats
+    session.validateRecvNonce(nonce);
+
+    // 3. Extract ciphertext and 16-byte MAC
+    final encryptedBody = packet.encryptedPayload.sublist(12);
+    final ciphertextLen = encryptedBody.length - 16;
+    final ciphertext = Uint8List.fromList(encryptedBody.sublist(0, ciphertextLen));
+    final mac = Uint8List.fromList(encryptedBody.sublist(ciphertextLen));
 
     final decryptedBytes = await cryptoService.decryptPayload(
       ciphertext: ciphertext,

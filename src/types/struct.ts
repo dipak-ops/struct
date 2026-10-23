@@ -79,6 +79,7 @@ export interface MeshPacket {
   payloadLength: number;
   ciphertextPayload: string; // Base64 or Hex
   authTag: string; // Poly1305 16-byte MAC
+  nonce?: string; // 12-byte nonce (24 hex chars)
   checksum: number; // CRC-16
 }
 

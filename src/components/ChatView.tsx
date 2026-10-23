@@ -17,6 +17,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   onVerifyPeer,
 }) => {
   const [inputText, setInputText] = useState('');
+  const [isSending, setIsSending] = useState(false);
   const [showTechnicalInfo, setShowTechnicalInfo] = useState(false);
   const [disappearingMode, setDisappearingMode] = useState<number | undefined>(undefined);
 
@@ -34,12 +35,19 @@ export const ChatView: React.FC<ChatViewProps> = ({
       (m.senderId === peer.id && m.recipientId === currentNode.id)
   );
 
-  const handleSend = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputText.trim()) return;
+  const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
 
-    onSendMessage(inputText.trim(), disappearingMode);
-    setInputText('');
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputText.trim() || isSending) return;
+
+    setIsSending(true);
+    try {
+      await onSendMessage(inputText.trim(), disappearingMode);
+      setInputText('');
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const getStatusSymbol = (status: string) => {
@@ -108,15 +116,17 @@ export const ChatView: React.FC<ChatViewProps> = ({
           <div className="grid grid-cols-2 gap-x-4 gap-y-1">
             <div className="flex justify-between">
               <span className="text-[#8A8A8A]">STATUS</span>
-              <span className="text-[#00FF66]">DELIVERED</span>
+              <span className={lastMsg?.status === 'delivered' ? 'text-[#00FF66]' : lastMsg?.status === 'failed' ? 'text-[#FF3B30]' : 'text-[#FFD600]'}>
+                {lastMsg ? lastMsg.status.toUpperCase() : 'NO MESSAGES'}
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-[#8A8A8A]">HOPS</span>
-              <span className="text-white">{peer.id === 'node_c' ? '2' : '1'}</span>
+              <span className="text-white">{peer.id === 'node_c' ? '2 (A→B→C)' : '1 DIRECT'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-[#8A8A8A]">PACKET</span>
-              <span className="text-white">8F31...</span>
+              <span className="text-white">{lastMsg ? `#${lastMsg.id.slice(-6).toUpperCase()}` : 'N/A'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-[#8A8A8A]">ENCRYPTION</span>
@@ -124,7 +134,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
             </div>
             <div className="flex justify-between">
               <span className="text-[#8A8A8A]">TTL</span>
-              <span className="text-white">5</span>
+              <span className="text-white">{lastMsg ? lastMsg.ttl : 5}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-[#8A8A8A]">VERIFICATION</span>
@@ -194,10 +204,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
         <button
           type="submit"
-          disabled={!inputText.trim()}
+          disabled={!inputText.trim() || isSending}
           className="px-4 py-2 bg-[#080808] hover:bg-[#111111] border border-[#00FF66] text-[#00FF66] text-xs font-mono font-bold uppercase cursor-pointer disabled:opacity-40 transition-colors"
         >
-          SEND
+          {isSending ? 'SENDING...' : 'SEND'}
         </button>
       </form>
     </div>

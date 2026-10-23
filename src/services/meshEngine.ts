@@ -363,7 +363,7 @@ export class MeshNetworkEngine {
     this.nonceCounters.set(senderId, counter);
 
     // 2. Encrypt payload with AEAD (Simulating ChaCha20-Poly1305)
-    const { ciphertextHex, authTagHex } = await encryptPayload(text, sessionKey, counter);
+    const { ciphertextHex, authTagHex, nonceHex } = await encryptPayload(text, sessionKey, counter);
 
     // 3. Build MeshPacket
     const packetBytes = hexToBytes(ciphertextHex);
@@ -386,6 +386,7 @@ export class MeshNetworkEngine {
       payloadLength: packetBytes.length,
       ciphertextPayload: ciphertextHex,
       authTag: authTagHex,
+      nonce: nonceHex,
       checksum: crc,
     };
 
@@ -539,10 +540,11 @@ export class MeshNetworkEngine {
       try {
         // Derive session key to decrypt
         const sessionKey = await this.getOrCreateSessionKey(packet.senderId, node.id);
+        const nonceToUse = packet.nonce || '000000000000000000000001';
         const decryptedText = await decryptPayload(
           packet.ciphertextPayload,
           packet.authTag,
-          '000000000000000000000001', // Monotonic nonce reference
+          nonceToUse,
           sessionKey
         );
 
@@ -713,6 +715,10 @@ export class MeshNetworkEngine {
       setTimeout(() => {
         const sender = this.nodes.get(originalSenderId);
         if (sender) {
+          const matchedMsg = sender.messages.find(m => m.id === messageId);
+          if (matchedMsg) {
+            matchedMsg.status = 'delivered';
+          }
           if (originatingMsg) {
             originatingMsg.status = 'delivered';
           }

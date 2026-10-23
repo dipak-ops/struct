@@ -8,7 +8,7 @@ import '../core/constants.dart';
 class PacketCodec {
   static const int magicByte = 0x53; // 'S'
   static const int currentVersion = 0x01;
-  static const int minHeaderLength = 48; // Minimum header before payload
+  static const int minHeaderLength = 62; // Minimum header before payload
 
   /// Compute CRC-16 CCITT (0x1021)
   static int computeCrc16(Uint8List data, [int offset = 0, int? length]) {
@@ -78,7 +78,7 @@ class PacketCodec {
 
   /// Decodes and validates a raw byte buffer into a MeshPacket
   static MeshPacket decode(Uint8List rawBytes) {
-    if (rawBytes.length < minHeaderLength + 16) {
+    if (rawBytes.length < minHeaderLength + 2) {
       throw const PacketValidationError('Packet too short to contain valid header and checksum');
     }
 
